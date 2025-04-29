@@ -1,0 +1,31 @@
+{
+  "build": {
+    "core":    "esp32",
+    "variant": "esp32s3",
+    "mcu": "esp32s3",
+    "f_cpu": "240000000L",
+    "f_flash": "80000000L",
+    "flash_mode": "qio",
+    "psram_type": "opi",
+    "extra_flags": [
+      "-DBOARD_HAS_PSRAM",
+      "-mfix-esp32-psram-cache-issue"
+    ]
+  },
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+
+  "name": "ESP32-S3-Touch-LCD-1.85C",  
+  "vendor": "Waveshare",  
+  "url": "https://www.waveshare.com/esp32-s3-touch-lcd-1.85c.htm",  
+
+  "upload": {
+    "maximum_size": 16777216,
+    "maximum_ram_size": 327680,
+    "speed": 115200
+  },
+  "debug": {
+    "openocd_target": "esp32s3",
+    "onboard_tools": ["esp-builtin"]
+  }
+}
