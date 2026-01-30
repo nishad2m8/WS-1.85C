@@ -13,5 +13,5 @@
 bool WiFi_Init();
 bool WiFi_IsConnected();
 void WiFi_Reconnect();
-void WiFi_PrintStatus();
-int WiFi_GetRSSI();
+void WiFi_PrintStatus(); 
+int WiFi_GetRSSI(); 
