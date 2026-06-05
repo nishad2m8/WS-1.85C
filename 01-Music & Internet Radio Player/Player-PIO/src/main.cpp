@@ -1,6 +1,13 @@
 #include <Arduino.h>
+#include "config.h"
 #include "Display_ST77916.h"
+
+#ifdef HARDWARE_V2
+#include "Audio_ES8311.h"
+#else
 #include "Audio_PCM5101.h"
+#endif
+
 #include "LVGL_Driver.h"
 #include "BAT_Driver.h"
 #include "SD_Card.h"
@@ -24,27 +31,29 @@ void Driver_Loop(void *parameter)
 {
     // Register this task with the watchdog - newer API
     esp_task_wdt_add(NULL);
-    
+
     // Main driver loop
     while (1)
     {
         // Reset the watchdog timer
         esp_task_wdt_reset();
-        
-        // Regular system tasks - use correct function name
-        BAT_Get_Volts(); // Keep original function name if this is correct
-        
-        // Periodically check WiFi connection
+
+        // Regular system tasks
+        BAT_Get_Volts();
+
+        // Update WiFi status (non-blocking check)
+        WiFi_Update();
+
+        // Periodically trigger reconnection if needed
         static uint32_t lastWifiCheck = 0;
-        if (millis() - lastWifiCheck > 60000) { // Check every minute (reduced frequency)
+        if (millis() - lastWifiCheck > 60000) { // Check every minute
             if (!WiFi_IsConnected()) {
                 WiFi_Reconnect();
             }
             lastWifiCheck = millis();
         }
-        
-        // More time between iterations to save CPU
-        vTaskDelay(pdMS_TO_TICKS(250)); // Increased from 200ms
+
+        vTaskDelay(pdMS_TO_TICKS(250));
     }
 }
 
@@ -97,124 +106,117 @@ void memory_info() {
     #endif
 }
 
-// Memory-optimized setup function
+// Memory-optimized setup function with boot priority optimization
 void setup()
 {
     // Initialize serial communication first for debugging
     Serial.begin(115200);
-    delay(100);
-    
-    Serial.println("Starting audio player setup with PSRAM support...");
-    
-    // Configure watchdog timer with updated API
+    delay(50); // Reduced from 100ms
+
+    Serial.println("Boot starting...");
+
+    // Configure watchdog timer - increased timeout for boot phase
     esp_task_wdt_config_t wdt_config = {
-        .timeout_ms = 10000,            // 10 seconds timeout
+        .timeout_ms = 15000,            // 15 seconds for boot (increased safety margin)
         .idle_core_mask = (1 << 0),     // Bitmask of cores that can trigger idle timeout
         .trigger_panic = true           // Trigger panic on timeout
     };
     esp_task_wdt_init(&wdt_config);
-    
-    // Print initial memory info
-    memory_info();
-    
-    // Initialize basic drivers
+
+    // PRIORITY 1: Get display working first (user feedback)
+    Serial.println("Init drivers...");
     Driver_Init();
+    esp_task_wdt_reset(); // Feed watchdog
     
     #ifdef CONFIG_SPIRAM_SUPPORT
     if (esp_spiram_is_initialized()) {
-        Serial.println("PSRAM is available for audio buffers");
-    } else {
-        Serial.println("Warning: PSRAM not initialized despite being enabled");
+        Serial.println("PSRAM available");
     }
     #endif
-    
-    // Pre-initialize audio with proper configuration
-    if (audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT)) {
-        Serial.println("Audio hardware initialized successfully");
-    } else {
-        Serial.println("Audio hardware initialization failed");
-    }
-    
-    // Initialize the LCD and backlight with reduced power
+
+    // PRIORITY 2: Display - user sees boot progress
+    Serial.println("Init display...");
     LCD_Init();
     Set_Backlight(40);
-    
+    esp_task_wdt_reset(); // Feed watchdog
+
     // Initialize LVGL with memory optimizations
     Lvgl_Init();
+    esp_task_wdt_reset(); // Feed watchdog
 
-    // Initialize UI components
+    // Initialize UI components - user sees something!
     ui_init();
+    esp_task_wdt_reset(); // Feed watchdog
+    Serial.println("Display ready");
 
-    // Initialize SD card with proper error handling
-    Serial.println("Initializing SD card...");
+    // PRIORITY 3: Audio hardware (fast init)
+#ifdef HARDWARE_V2
+    // V2: Initialize ES8311 codec with amplifier
+    if (Audio_Init() == ESP_OK) {
+        Serial.println("Audio ES8311 ready");
+    } else {
+        Serial.println("Audio ES8311 init failed");
+    }
+#else
+    // V1: Simple I2S DAC setup
+    if (audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT)) {
+        Serial.println("Audio PCM5101 ready");
+    }
+#endif
+    esp_task_wdt_reset(); // Feed watchdog
+
+    // PRIORITY 4: SD card (may take time but needed for music)
+    Serial.println("Init SD...");
     esp_err_t sd_result = SD_Init();
     if (sd_result == ESP_OK) {
-        Serial.println("SD card initialized successfully");
+        Serial.println("SD ready");
         sd_card_available = true;
-        
-        // Minimal SD card check to save memory
-        File root = SD_MMC.open("/");
-        if (root && root.isDirectory()) {
-            File file = root.openNextFile();
-            if (file) {
-                Serial.printf("Found file: %s\n", file.name());
-                file.close();
-            } else {
-                Serial.println("No files found in root directory");
-            }
-            root.close();
-        }
     } else {
-        Serial.println("SD card initialization failed, continuing without SD card");
+        Serial.println("SD failed - continuing");
         sd_card_available = false;
     }
+    esp_task_wdt_reset(); // Feed watchdog
+
+    // PRIORITY 5: WiFi - non-blocking, continues in background
+    Serial.println("Init WiFi...");
+    WiFi_Init(); // Returns quickly, connects in background
+    esp_task_wdt_reset(); // Feed watchdog
     
-    // Memory checkpoint before WiFi
-    memory_info();
-    
-    // Initialize WiFi connection - do this after SD card to improve memory
-    Serial.println("Initializing WiFi...");
-    WiFi_Init();
-    
-    // Memory checkpoint after WiFi
-    memory_info();
-    
-    // Create UI task on core 0 with increased stack size
-    // The stack overflow was in UITask, so we're increasing its size
+    // Create tasks with load balancing across cores
+    Serial.println("Starting tasks...");
+
+    // UI task on Core 0 - high priority for responsive display
     xTaskCreatePinnedToCore(
         UI_Task,
         "UITask",
-        8192,       // Increased from 4096 to 8192 to prevent stack overflow
+        8192,       // Large stack for LVGL
         NULL,
-        2,          // Priority 2
+        2,          // Priority 2 (higher)
         &ui_task_handle,
         0           // Core 0 for UI
     );
-    
-    // Driver task on core 0 with minimal stack
+
+    // Driver task on Core 1 - separate from UI to prevent contention
     xTaskCreatePinnedToCore(
         Driver_Loop,
         "DriverTask",
-        2048,       // Same size as before
+        2048,
         NULL,
-        1,          // Priority 1 (lower than UI task)
+        1,          // Priority 1 (lower)
         &driver_task_handle,
-        0           // Core 0
+        1           // Core 1 - moved from Core 0!
     );
-    
-    // Wait before initializing the audio subsystem
-    vTaskDelay(pdMS_TO_TICKS(200));
-    
-    // Memory checkpoint before UI controller
-    memory_info();
-    
+
+    // Brief delay to let tasks start
+    vTaskDelay(pdMS_TO_TICKS(100)); // Reduced from 200ms
+    esp_task_wdt_reset(); // Feed watchdog
+
     // Initialize the UI controller
     UIController_Init();
-    
-    // Final memory check
+    esp_task_wdt_reset(); // Feed watchdog
+
+    Serial.println("Boot complete!");
     memory_info();
-    
-    Serial.println("Setup complete");
 }
 
 void loop()

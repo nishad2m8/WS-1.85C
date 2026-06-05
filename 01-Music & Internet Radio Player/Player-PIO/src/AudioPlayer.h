@@ -54,3 +54,9 @@ bool AudioPlayer_SetStation(int index);
 // Volume control functions
 void AudioPlayer_SetVolume(uint8_t volume);
 uint8_t AudioPlayer_GetVolume();
+
+// Buffer status (for streaming/radio)
+int AudioPlayer_GetBufferFillPercent();
+
+// Get bitrate in kbps
+uint32_t AudioPlayer_GetBitRate();

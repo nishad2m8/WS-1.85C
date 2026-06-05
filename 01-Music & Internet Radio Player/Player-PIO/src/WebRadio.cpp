@@ -1,5 +1,11 @@
 #include "WebRadio.h"
+#include "config.h"
+
+#ifdef HARDWARE_V2
+#include "Audio_ES8311.h"
+#else
 #include "Audio_PCM5101.h"
+#endif
 
 int currentStation = 0;
 bool radioPlaying = false;

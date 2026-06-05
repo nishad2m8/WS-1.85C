@@ -30,7 +30,3 @@ void UI_PlayPauseButtonCallback(lv_event_t *e);
 void UI_NextButtonCallback(lv_event_t *e);
 void UI_PreviousButtonCallback(lv_event_t *e);
 void UI_ListCallback(lv_event_t *e);
-
-// New callbacks for volume and brightness controls
-void UI_VolumeArcCallback(lv_event_t *e);
-void UI_BrightnessArcCallback(lv_event_t *e);

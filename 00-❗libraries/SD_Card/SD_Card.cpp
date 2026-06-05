@@ -1,4 +1,5 @@
 #include "SD_Card.h"
+#include "esp_task_wdt.h"
 
 bool SDCard_Flag = false;
 bool SDCard_Finish = false;
@@ -8,37 +9,38 @@ uint16_t Flash_Size = 0;
 
 void SD_D3_Dis(){
   Set_EXIO(EXIO_PIN4, Low);
-  vTaskDelay(pdMS_TO_TICKS(10));
+  vTaskDelay(pdMS_TO_TICKS(5));
 }
 
 void SD_D3_EN(){
   Set_EXIO(EXIO_PIN4, High);
-  vTaskDelay(pdMS_TO_TICKS(10));
+  vTaskDelay(pdMS_TO_TICKS(5));
 }
 
 esp_err_t SD_Init() {
   // Initialize flags to a safe state
   SDCard_Flag = false;
   SDCard_Finish = false;
-  
+
   // SD MMC
   if(!SD_MMC.setPins(SD_CLK_PIN, SD_CMD_PIN, SD_D0_PIN, -1, -1, -1)){
     printf("SD MMC: Pin change failed!\r\n");
     return ESP_FAIL;
   }
-  
+
   // Enable SD card D3 line
   SD_D3_EN();
-  
-  // Try to mount the SD card with a reasonable timeout
+
+  // Try to mount the SD card - reduced retries for faster boot
   int retry_count = 0;
   bool sd_initialized = false;
-  
-  while (retry_count < 3 && !sd_initialized) {
+
+  while (retry_count < 2 && !sd_initialized) {
+    esp_task_wdt_reset(); // Feed watchdog
     sd_initialized = SD_MMC.begin("/sdcard", true, true);
     if (!sd_initialized) {
-      printf("SD init attempt %d failed, retrying...\r\n", retry_count + 1);
-      vTaskDelay(pdMS_TO_TICKS(100)); // Wait before retry
+      printf("SD init attempt %d failed\r\n", retry_count + 1);
+      vTaskDelay(pdMS_TO_TICKS(50)); // Reduced delay
       retry_count++;
     }
   }

@@ -5,6 +5,7 @@
     The provided LVGL library file must be installed first
 ******************************************************************************/
 #include "LVGL_Driver.h"
+#include "lv_conf.h"
 
 static lv_disp_draw_buf_t draw_buf;
 static lv_color_t buf1[ LVGL_BUF_LEN ];
@@ -40,11 +41,13 @@ void Lvgl_Touchpad_Read( lv_indev_drv_t * indev_drv, lv_indev_data_t * data )
   touch_data.points = 0;
   touch_data.gesture = NONE;
 }
+#if LV_TICK_CUSTOM == 0
 void example_increase_lvgl_tick(void *arg)
 {
     /* Tell LVGL how many milliseconds has elapsed */
     lv_tick_inc(EXAMPLE_LVGL_TICK_PERIOD_MS);
 }
+#endif
 void example_increase_lvgl_Loop_tick(void *arg)
 {
   lv_timer_handler(); /* let the GUI do its work */
@@ -61,7 +64,7 @@ void Lvgl_Init(void)
   disp_drv.hor_res = LCD_WIDTH;
   disp_drv.ver_res = LCD_HEIGHT;
   disp_drv.flush_cb = Lvgl_Display_LCD;
-  disp_drv.full_refresh = 1;                    /**< 1: Always make the whole screen redrawn*/
+  disp_drv.full_refresh = 0;                    /**< 0: Only redraw changed areas (much faster) */
   disp_drv.draw_buf = &draw_buf;
   lv_disp_drv_register( &disp_drv );
 
@@ -77,6 +80,8 @@ void Lvgl_Init(void)
   // lv_label_set_text( label, "Hello Ardino and LVGL!");
   // lv_obj_align( label, LV_ALIGN_CENTER, 0, 0 );
 
+#if LV_TICK_CUSTOM == 0
+  // Only needed when not using custom tick source
   const esp_timer_create_args_t lvgl_tick_timer_args = {
     .callback = &example_increase_lvgl_tick,
     .name = "lvgl_tick"
@@ -84,7 +89,7 @@ void Lvgl_Init(void)
   esp_timer_handle_t lvgl_tick_timer = NULL;
   esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer);
   esp_timer_start_periodic(lvgl_tick_timer, EXAMPLE_LVGL_TICK_PERIOD_MS * 1000);
-
+#endif
 }
 void Lvgl_Loop(void)
 {

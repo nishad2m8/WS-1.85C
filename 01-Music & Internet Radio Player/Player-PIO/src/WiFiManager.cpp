@@ -1,40 +1,57 @@
 #include "WiFiManager.h"
+#include "esp_task_wdt.h"
 
 bool wifi_available = false;
+bool wifi_init_started = false;
 unsigned long last_reconnect_attempt = 0;
 const unsigned long reconnect_interval = 30000; // Try to reconnect every 30 seconds
 
-// Initialize WiFi connection
+// Non-blocking WiFi initialization - starts connection and returns immediately
 bool WiFi_Init() {
-    Serial.println("Initializing WiFi...");
-    
+    Serial.println("Starting WiFi (non-blocking)...");
+
     // Set WiFi mode
     WiFi.mode(WIFI_STA);
-    
-    // Begin WiFi connection
+    WiFi.setAutoReconnect(true);
+
+    // Begin WiFi connection - this returns immediately
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    
-    // Wait for connection with timeout
+    wifi_init_started = true;
+
+    // Quick check - try for max 2 seconds during boot (non-critical)
     unsigned long start_time = millis();
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-        
-        // Check for timeout
-        if (millis() - start_time > WIFI_TIMEOUT) {
-            Serial.println("\nWiFi connection timed out!");
-            wifi_available = false;
-            return false;
-        }
+    while (WiFi.status() != WL_CONNECTED && (millis() - start_time < 2000)) {
+        delay(100);
+        esp_task_wdt_reset(); // Feed watchdog
     }
-    
-    // Successfully connected
-    Serial.println("\nWiFi connected!");
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
-    wifi_available = true;
-    
-    return true;
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("WiFi connected!");
+        Serial.print("IP: ");
+        Serial.println(WiFi.localIP());
+        wifi_available = true;
+        return true;
+    }
+
+    // Not connected yet - will continue in background
+    Serial.println("WiFi connecting in background...");
+    wifi_available = false;
+    return false; // Not an error - connection continues in background
+}
+
+// Check and update WiFi status (call periodically from task)
+void WiFi_Update() {
+    if (!wifi_init_started) return;
+
+    if (WiFi.status() == WL_CONNECTED && !wifi_available) {
+        Serial.println("WiFi connected!");
+        Serial.print("IP: ");
+        Serial.println(WiFi.localIP());
+        wifi_available = true;
+    } else if (WiFi.status() != WL_CONNECTED && wifi_available) {
+        Serial.println("WiFi disconnected");
+        wifi_available = false;
+    }
 }
 
 // Check if WiFi is currently connected
@@ -42,48 +59,28 @@ bool WiFi_IsConnected() {
     return WiFi.status() == WL_CONNECTED;
 }
 
-// Attempt to reconnect WiFi if disconnected
+// Non-blocking reconnect - just triggers reconnection
 void WiFi_Reconnect() {
-    // Only attempt reconnection at intervals to avoid blocking
+    // Only attempt reconnection at intervals
     if (millis() - last_reconnect_attempt < reconnect_interval) {
         return;
     }
-    
+
     last_reconnect_attempt = millis();
-    
+
     // Check if already connected
     if (WiFi.status() == WL_CONNECTED) {
         wifi_available = true;
         return;
     }
-    
-    Serial.println("Attempting to reconnect WiFi...");
-    
-    // Disconnect first
-    WiFi.disconnect();
-    delay(1000);
-    
-    // Try to reconnect
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    
-    // Wait briefly for connection
-    unsigned long start_time = millis();
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-        
-        // Short timeout for non-blocking behavior
-        if (millis() - start_time > 5000) {
-            Serial.println("\nReconnection attempt timed out");
-            wifi_available = false;
-            return;
-        }
-    }
-    
-    Serial.println("\nWiFi reconnected!");
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
-    wifi_available = true;
+
+    Serial.println("Triggering WiFi reconnect...");
+
+    // Disconnect and reconnect - non-blocking
+    WiFi.disconnect(false); // Don't erase credentials
+    WiFi.reconnect(); // This returns immediately
+
+    wifi_available = false;
 }
 
 // Print the current WiFi status

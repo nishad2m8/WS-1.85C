@@ -40,6 +40,11 @@ void Music_pause();
 void Music_resume();    
 
 // Status functions
-uint32_t Music_Duration();  
-uint32_t Music_Elapsed();   
+uint32_t Music_Duration();
+uint32_t Music_Elapsed();
 uint16_t Music_Energy();
+
+// Radio streaming functions
+bool Play_Radio(const char* url);
+void Stop_Radio();
+bool Is_Radio_Playing();

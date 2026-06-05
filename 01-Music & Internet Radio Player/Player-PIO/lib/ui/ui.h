@@ -1,39 +1,33 @@
-/**
- * @file ui.h
- *
- */
+#ifndef EEZ_LVGL_UI_GUI_H
+#define EEZ_LVGL_UI_GUI_H
 
-#ifndef UI_OUTER_H
-#define UI_OUTER_H
+#include <lvgl.h>
+
+
+
+#if defined(EEZ_FOR_LVGL)
+#include <eez/flow/lvgl_api.h>
+#endif
+
+#if !defined(EEZ_FOR_LVGL)
+#include "screens.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/*********************
- *      INCLUDES
- *********************/
-#include "src/ui.h"
 
-/*********************
- *      DEFINES
- *********************/
 
-/**********************
- *      TYPEDEFS
- **********************/
+void ui_init();
+void ui_tick();
 
-/**********************
- * GLOBAL PROTOTYPES
- **********************/
-
-/**********************
- *      MACROS
- **********************/
-
-#ifdef __cplusplus
-} /*extern "C"*/
+#if !defined(EEZ_FOR_LVGL)
+void loadScreen(enum ScreensEnum screenId);
 #endif
 
-#endif /*UI_OUTER_H*/
+#ifdef __cplusplus
+}
+#endif
 
+#endif // EEZ_LVGL_UI_GUI_H

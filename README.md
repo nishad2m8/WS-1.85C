@@ -25,17 +25,26 @@ Check [OBP](https://github.com/nishad2m8/Squareline-OBP) for Squareline Studio O
 ```
 Project/
 ├── lib/
-│   ├── lv_conf.h
+│   ├── Audio_ES8311/
+│   ├── Audio_PCM5101/
+│   ├── BAT_Driver/
+│   .
 │   ├── lvgl/
-│   ├── TFT_eSPI/
 │   └── ui/
 ├── src/
 │   └── main.cpp
 ```
 
+### Music Player:
+Change the hardware version in `platformio.ini`
+```ini
+; Select hardware version: V1 or V2
+[platformio]
+default_envs = V1
+```
 
 | No.  | Thumb | Youtube URL |
 | ------|-----|----------|
-| 1 | !![alt text](<00-Assets/01-ESP32-S3 Music & Internet Radio Player with Waveshare 1.85" Display using LVGL.jpg>) | https://youtu.be/RMRKeBdVx6M|
+| 1 | <img src="00-Assets/speaker_box_music_player.png" width="250" />| https://youtu.be/RMRKeBdVx6M|
 
 <!-- | No | Thumb  | URL |  -->
